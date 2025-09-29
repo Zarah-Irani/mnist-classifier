@@ -1,6 +1,8 @@
 # 🖌️ MNIST Digit Classifier (ONNX Runtime Web)
 
-An interactive browser demo where you can **draw a digit (0–9)** on a canvas and instantly get predictions using a **tiny PyTorch CNN** exported to **ONNX**. The model runs entirely *client‑side* with [onnxruntime‑web](https://onnxruntime.ai/) (WebGPU/WASM) — no server required.
+An interactive browser demo where you can **draw a digit (0–9)** on a canvas and instantly get predictions using a **tiny PyTorch CNN** exported to **ONNX**. The model runs entirely *client-side* with [onnxruntime-web](https://onnxruntime.ai/) (WebGPU/WASM) — no server required.
+
+🌐 **Live Demo:** [https://zarah-irani.github.io/mnist-classifier/](https://zarah-irani.github.io/mnist-classifier/)
 
 ---
 
@@ -60,14 +62,14 @@ _Add a GIF or screenshot of the demo in action here._
 ## 🧩 Tech Stack
 - **PyTorch** – training & export
 - **ONNX** – interoperable model format
-- **onnxruntime‑web** – browser inference (WebGPU/WASM)
+- **onnxruntime-web** – browser inference (WebGPU/WASM)
 - **Vanilla HTML/CSS/JS** – clean interactive UI
 
 ---
 
 ## 📈 Extensions
-- Replace MNIST with **Fashion‑MNIST**.
-- Fine‑tune **MobileNetV3‑Small** for a small custom dataset (<10 MB).
+- Replace MNIST with **Fashion-MNIST**.
+- Fine-tune **MobileNetV3-Small** for a small custom dataset (<10 MB).
 - Deploy multiple models and add a dropdown to switch between them.
 - Improve UI with animations, themes, and probability charts.
 
@@ -76,4 +78,4 @@ _Add a GIF or screenshot of the demo in action here._
 ## 📜 License
 MIT — free to fork and modify.
 
-> **Why you saw raw HTML earlier:** GitHub READMEs (Markdown) **sanitize** tags like `<head>`, `<style>`, and `<title>`. If you paste a full HTML page into `README.md`, those tags will show up as text. Use this Markdown version for GitHub, and keep any styled HTML as a separate file (e.g., `docs/readme.html`) if you want a themed page.
+> 👩‍💻 Built as a portfolio demo to showcase in-browser ML with ONNX Runtime Web.
