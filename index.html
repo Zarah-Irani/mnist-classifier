@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>MNIST Digit Demo (ONNX Runtime Web)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+  <style>
+    :root{
+      --bg:#0f1220; --card:#171a2b; --accent:#7c9cf5; --muted:#9aa3b2; --text:#eef1f7; --ok:#6ee7b7;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; padding:24px; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      color:var(--text); background: radial-gradient(1200px 600px at 10% -10%, #1b2145 0%, #0f1220 50%) fixed;
+    }
+    .wrapper{max-width:980px; margin:0 auto; display:grid; gap:20px}
+    .hero{
+      background: linear-gradient(135deg, rgba(124,156,245,.2), rgba(124,156,245,0) 60%);
+      border:1px solid rgba(124,156,245,.25); padding:16px 18px; border-radius:16px;
+    }
+    .row{display:flex; gap:16px; flex-wrap:wrap; align-items:center}
+    .card{
+      background:var(--card); border:1px solid rgba(124,156,245,.15); border-radius:16px; padding:16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.25);
+    }
+    .left{flex:1 1 420px; min-width:320px}
+    .right{flex:1 1 380px; min-width:300px}
+    .title{font-weight:750; letter-spacing:.2px; margin:0 0 8px}
+    .muted{color:var(--muted); font-size:14px}
+    canvas#pad{
+      width:360px; height:360px; max-width:100%;
+      background:#0b0d17; border-radius:18px; border:1px dashed rgba(255,255,255,.15);
+      touch-action:none; cursor: crosshair; box-shadow: inset 0 0 0 9999px rgba(255,255,255,.02);
+    }
+    .controls{display:flex; gap:8px; flex-wrap:wrap; margin-top:12px}
+    button, select, input[type="range"]{
+      background:#101426; color:#eaf0ff; border:1px solid rgba(124,156,245,.35);
+      padding:10px 12px; border-radius:12px; cursor:pointer; font-weight:600;
+    }
+    button:hover{border-color:var(--accent)}
+    .badge{display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; background:#0e1326; border:1px solid rgba(124,156,245,.25); font-size:12px}
+    .ok{color:var(--ok)}
+    .grid{display:grid; gap:14px}
+    #probs{display:grid; gap:6px}
+    .bar{display:grid; grid-template-columns:28px 1fr auto; align-items:center; gap:10px}
+    .bar .track{height:10px; background:#0f1430; border-radius:999px; position:relative; overflow:hidden; border:1px solid rgba(124,156,245,.2)}
+    .bar .fill{position:absolute; inset:0 auto 0 0; width:0%; background:linear-gradient(90deg, var(--accent), #8ef2ff); border-radius:999px}
+    .mini{
+      display:flex; align-items:center; gap:10px; color:var(--muted); font-size:13px;
+    }
+    .mini canvas{width:84px; height:84px; image-rendering: pixelated; background:#0b0d17; border-radius:8px; border:1px solid rgba(255,255,255,.1)}
+    .notice{font-size:13px; color:var(--muted)}
+    .footer{color:#aab3c5; font-size:12px; text-align:center; margin-top:8px}
+    .select-wrap{display:flex; gap:8px; align-items:center}
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="hero">
+      <div class="row" style="justify-content:space-between">
+        <div>
+          <div class="badge">ONNX Runtime Web • <span id="backend">loading…</span></div>
+          <h1 class="title">Draw a digit → Instant prediction</h1>
+          <div class="muted">Tiny PyTorch CNN exported to ONNX (INT8/FP16/FP32). Runs in your browser with WebGPU/WASM.</div>
+        </div>
+        <div class="select-wrap">
+          <label for="modelSel" class="muted">Model:</label>
+          <select id="modelSel">
+            <option value="mnist_tiny_int8.onnx">mnist_tiny_int8.onnx (smallest)</option>
+            <option value="mnist_tiny_fp16.onnx">mnist_tiny_fp16.onnx</option>
+            <option value="mnist_tiny_fp32.onnx">mnist_tiny_fp32.onnx</option>
+          </select>
+          <button id="reload">Load</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="left card">
+        <h3 class="title">Canvas</h3>
+        <canvas id="pad" width="360" height="360"></canvas>
+        <div class="controls">
+          <button id="predict">Predict</button>
+          <button id="clear">Clear</button>
+          <button id="undo">Undo</button>
+          <label class="mini">Brush
+            <input id="brush" type="range" min="8" max="36" step="1" value="24" />
+          </label>
+          <span id="status" class="muted">loading model…</span>
+        </div>
+        <div class="mini" style="margin-top:10px">
+          <canvas id="thumb" width="28" height="28" title="28×28 preview"></canvas>
+          28×28 preview (what the model sees)
+        </div>
+        <div class="notice" style="margin-top:10px">
+          Tip: draw thick, centered digits. We invert colors and normalize with MNIST stats before inference.
+        </div>
+      </div>
+
+      <div class="right card grid">
+        <div>
+          <h3 class="title">Prediction</h3>
+          <div class="badge">Top class: <span id="top" class="ok">—</span></div>
+        </div>
+        <div id="probs"></div>
+        <div class="footer">Model input: [1×1×28×28] • Output: logits[10] → softmax</div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ===== UI + Canvas ===== */
+const pad = document.getElementById('pad');
+const ctx = pad.getContext('2d');
+const thumb = document.getElementById('thumb').getContext('2d');
+const statusEl = document.getElementById('status');
+const backendEl = document.getElementById('backend');
+const modelSel = document.getElementById('modelSel');
+
+function resetCanvas(){
+  ctx.fillStyle = "#000"; // black background (will invert later)
+  ctx.fillRect(0,0,pad.width,pad.height);
+}
+resetCanvas();
+
+let drawing=false, last=null, brush=24;
+const getPos = (e) => {
+  const r = pad.getBoundingClientRect();
+  const p = e.touches ? e.touches[0] : e;
+  return {
+    x: (p.clientX - r.left) * (pad.width  / r.width),
+    y: (p.clientY - r.top)  * (pad.height / r.height),
+  };
+};
+const start = (e)=>{ drawing=true; last=getPos(e); pushUndo(); stroke(last,last); e.preventDefault(); };
+const move  = (e)=>{ if(!drawing) return; const p=getPos(e); stroke(last,p); last=p; e.preventDefault(); };
+const end   = ()=>{ drawing=false; };
+
+function stroke(a,b){
+  ctx.lineJoin = "round"; ctx.lineCap = "round";
+  ctx.strokeStyle = "#fff"; // white ink on black bg
+  ctx.lineWidth = brush;
+  ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+}
+
+pad.addEventListener('mousedown', start); window.addEventListener('mousemove', move); window.addEventListener('mouseup', end);
+pad.addEventListener('touchstart', start, {passive:false});
+pad.addEventListener('touchmove',  move,  {passive:false});
+pad.addEventListener('touchend',   end);
+
+document.getElementById('clear').onclick = ()=>{ resetCanvas(); renderPreview(); };
+document.getElementById('undo').onclick  = ()=>{ popUndo(); renderPreview(); };
+document.getElementById('brush').oninput = (e)=>{ brush = +e.target.value; };
+
+let undoStack=[];
+function pushUndo(){ undoStack.push(ctx.getImageData(0,0,pad.width,pad.height)); if(undoStack.length>20) undoStack.shift(); }
+function popUndo(){ if(!undoStack.length) return; const im=undoStack.pop(); ctx.putImageData(im,0,0); }
+
+/* ===== Model loading ===== */
+let session=null;
+async function tryLoad(paths){
+  for(const p of paths){
+    try{
+      statusEl.textContent = `loading ${p}…`;
+      session = await ort.InferenceSession.create(p, {
+        executionProviders: ['webgpu','wasm'],
+        graphOptimizationLevel: 'all'
+      });
+      statusEl.textContent = `model ready ✅ (${p})`;
+      return p;
+    }catch(err){
+      console.warn(`Failed to load ${p}`, err);
+    }
+  }
+  throw new Error('No model could be loaded. Ensure the .onnx files are in the same folder as this HTML.');
+}
+
+document.getElementById('reload').onclick = async ()=>{
+  const choice = modelSel.value;
+  await loadModel([choice]); // only chosen path
+};
+
+async function loadModel(preferred){
+  const tried = await tryLoad(preferred);
+  // Show backend in use (approximate)
+  const eps = (await session.createRunOptions)?.executionMode || '—';
+  backendEl.textContent = (navigator.gpu ? 'WebGPU' : 'WASM') + ' • ' + tried;
+}
+
+/* ===== Preprocess =====
+   - Downscale to 28×28
+   - Grayscale (already black bg, white ink)
+   - Normalize with MNIST mean/std
+*/
+function preprocess(){
+  // make 28×28
+  const s = document.createElement('canvas');
+  s.width = 28; s.height = 28;
+  const sctx = s.getContext('2d');
+  sctx.drawImage(pad, 0, 0, 28, 28);
+  // preview
+  thumb.clearRect(0,0,28,28);
+  thumb.drawImage(s,0,0);
+  // to tensor
+  const data = sctx.getImageData(0,0,28,28).data;
+  const mean = 0.1307, std = 0.3081;
+  const arr = new Float32Array(1*1*28*28);
+  for(let i=0;i<28*28;i++){
+    const r = data[i*4], g = data[i*4+1], b = data[i*4+2];
+    // compute brightness; our digit is white on black (already)
+    let v = (r + g + b) / 3 / 255; // 0..1
+    // normalize
+    arr[i] = (v - mean) / std;
+  }
+  return new ort.Tensor('float32', arr, [1,1,28,28]);
+}
+
+/* ===== Inference ===== */
+function softmax(logits){
+  const m = Math.max(...logits);
+  const exps = logits.map(v => Math.exp(v - m));
+  const s = exps.reduce((a,b)=>a+b,0);
+  return exps.map(v => v/s);
+}
+
+async function predict(){
+  if(!session){ alert('Model not loaded yet'); return; }
+  const input = preprocess();
+  const feeds = { [session.inputNames[0]]: input };
+  const out = await session.run(feeds);
+  const logits = out[session.outputNames[0]].data;
+  const probs = softmax(Array.from(logits));
+  renderProbs(probs);
+}
+
+function renderProbs(probs){
+  const container = document.getElementById('probs');
+  container.innerHTML = '';
+  let bestIdx = 0; let bestVal = -1;
+  probs.forEach((p,i)=>{ if(p>bestVal){bestVal=p; bestIdx=i;} });
+  document.getElementById('top').textContent = `${bestIdx}  (${(bestVal*100).toFixed(1)}%)`;
+
+  for(let i=0;i<10;i++){
+    const row = document.createElement('div'); row.className='bar';
+    const label = document.createElement('div'); label.textContent = i;
+    const track = document.createElement('div'); track.className='track';
+    const fill = document.createElement('div'); fill.className='fill'; fill.style.width = (probs[i]*100).toFixed(1)+'%';
+    track.appendChild(fill);
+    const pct = document.createElement('div'); pct.textContent = (probs[i]*100).toFixed(1)+'%';
+    row.appendChild(label); row.appendChild(track); row.appendChild(pct);
+    container.appendChild(row);
+  }
+}
+
+/* ===== Hook buttons ===== */
+document.getElementById('predict').onclick = predict;
+
+/* ===== Initial load with fallbacks ===== */
+(async ()=>{
+  try{
+    await loadModel([
+      'mnist_tiny_int8.onnx',
+      'mnist_tiny_fp16.onnx',
+      'mnist_tiny_fp32.onnx'
+    ]);
+    renderPreview();
+  }catch(e){
+    statusEl.textContent = 'Failed to load any model. Check file paths.';
+    console.error(e);
+  }
+})();
+
+/* ===== Keep 28×28 preview fresh ===== */
+function renderPreview(){
+  const s = document.createElement('canvas'); s.width=28; s.height=28;
+  s.getContext('2d').drawImage(pad,0,0,28,28);
+  thumb.clearRect(0,0,28,28);
+  thumb.drawImage(s,0,0);
+}
+pad.addEventListener('mouseup', renderPreview);
+pad.addEventListener('touchend', renderPreview);
+</script>
+</body>
+</html>
+
